@@ -43,7 +43,7 @@ void async_write_test(size_t count)
         for (size_t j = 0; j < size; j++)
             writer << (uint8_t)(i & 0xFF);
 
-        table->async_write(i, *block, size, boost::bind(&async_write_handler, i, _1));
+        table->async_write(i, *block, boost::bind(&async_write_handler, i, _1));
     } 
 }
 
@@ -105,7 +105,7 @@ int main()
     for (size_t i = 0; i < g_result.size(); i++)
         assert(g_result[i]);
 
-    table->flush_right_now();
+    table->flush_immediately();
     read_test(kMaxCount);
     
     file_size = table->size();
@@ -123,7 +123,7 @@ int main()
     thr1.run();
     thr2.run();
 
-    table->flush_right_now();
+    table->flush_immediately();
     thr1.join();
     thr2.join();
 
