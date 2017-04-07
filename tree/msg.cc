@@ -56,6 +56,7 @@ void MsgTable::insert(const Msg& msg)
     iter.seek(msg);
 
     if (iter.valid()) {
+        // (bt) 如果找到了，先删除老的, iter.key()是Msg类型
         got = iter.key();
         
         if (got.key() == msg.key()) {

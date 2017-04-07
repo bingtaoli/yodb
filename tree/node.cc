@@ -58,7 +58,7 @@ bool Node::get(const Slice& key, Slice& value, Node* parent)
         read_unlock();
         return false;
     }
-
+    // (bt) 尝试从子child中查找
     Node* node = tree_->get_node_by_nid(pivots_[index].child_nid);
     assert(node);
 
@@ -91,7 +91,7 @@ bool Node::write(const Msg& msg)
 
     insert_msg(find_pivot(msg.key()), msg);
     set_dirty(true);
-
+    // (bt) 每次写完，都尝试下拉数据
     maybe_push_down_or_split();
     return true;
 }
@@ -144,11 +144,13 @@ size_t Node::find_pivot(Slice key)
     Comparator* cmp = tree_->options_.comparator;
 
     for (size_t i = 1; i < pivots_.size(); i++) {
+        // (bt) left_most_key为pivot中最小的key
         if (cmp->compare(key, pivots_[i].left_most_key) < 0) {
             return pivot;
         }
         pivot++;
     }
+    // (bt) 如果没有找到合适的位置，则最后一个pivot
     return pivot;
 }
 
@@ -172,6 +174,7 @@ void Node::split_table(MsgTable* table)
     }
 
     MsgTable* table0 = table;
+    // (bt) 建立一个新的table
     MsgTable* table1 = new MsgTable(tree_->options_.comparator);
 
     table0->lock();
@@ -194,7 +197,7 @@ void Node::split_table(MsgTable* table)
 
     size_t sz = table0->size();
     table0->resize(table0->count() / 2);
-
+    // (bt) 新增加一个pivot
     add_pivot(NID_NIL, table1, middle.key().clone());
 
     assert(table0->size() + table1->size() >= sz);
@@ -214,10 +217,13 @@ void Node::split_table(MsgTable* table)
     }
 }
 
+/**
+ * 该node尝试分裂，当一个node增加一个新的pivot的时候，可能数目太多导致分裂
+ */
 void Node::try_split_node(std::vector<Node*>& path)
 {
     assert(path.back() == this);
-
+    // (bt) 一个pivot会指向一个child node，切不会指向同一个child node
     if (pivots_.size() <= tree_->options_.max_node_child_number) {
         while (!path.empty()) {
             Node* node = path.back();
@@ -246,20 +252,21 @@ void Node::try_split_node(std::vector<Node*>& path)
     pivots_.resize(middle); 
     set_dirty(true);
 
-    path.pop_back();
+    path.pop_back();  // (bt) 删除path中node自身
 
     if (path.empty()) {
         Node* root = tree_->create_node();
         root->is_leaf_ = false;
 
-        root->add_pivot(nid(), NULL, Slice());
+        root->add_pivot(nid(), NULL, Slice());  // (bt) 把自身也加入为root的孩子
         root->add_pivot(node->nid(), NULL, middle_key.clone());
 
         tree_->grow_up(root);
     } else {
-        Node* parent = path.back();
-
+        Node* parent = path.back();  //(bt) 返回vector的最后一个元素
+        // (bt) parent的pivots增加一个新的pivot，它的child指向node
         parent->add_pivot(node->nid(), NULL, middle_key.clone());
+        // (bt) 父node增加一个pivot，尝试分裂
         parent->try_split_node(path);
     }
 
